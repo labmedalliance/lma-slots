@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ t.update_title }} — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="settings-container update-page">
+    <h1>{{ t.update_title }}</h1>
+    <p class="hint">{{ t.update_current }} <strong>{{ info.current }}</strong></p>
+
+    {% set running = status and status.state == 'running' %}
+
+    {% if running %}
+    <div class="update-progress" id="update-progress"
+         data-progress-url="{{ url_for('update.progress_json') }}"
+         data-target="{{ status.tag[1:] }}"
+         data-steps='{{ {"start": t.update_step_start, "backup": t.update_step_backup, "fetch": t.update_step_fetch, "checkout": t.update_step_checkout, "dependencies": t.update_step_dependencies, "verify": t.update_step_verify, "restart": t.update_step_restart}|tojson }}'
+         data-done="{{ t.update_done }}" data-failed="{{ t.update_failed }}" data-manual-restart="{{ t.update_manual_restart }}">
+        <p><strong>{{ t.update_installing.format(version=status.tag[1:]) }}</strong></p>
+        <p class="update-step" id="update-step">{{ t.update_step_start }}</p>
+        <p class="hint">{{ t.update_polls_safe }}</p>
+    </div>
+    {% elif status and status.state == 'failed' and info.release and status.tag == info.release.tag %}
+    <div class="settings-warning">
+        <p><strong>{{ t.update_failed }}</strong> {{ status.message }}</p>
+        <p>{{ t.update_rolled_back if status.rolled_back else t.update_not_changed }}</p>
+    </div>
+    {% elif status and status.state == 'done' and status.tag[1:] == info.current %}
+    <div class="update-success">
+        <p><strong>{{ t.update_done }}</strong></p>
+        {% if status.backup %}<p class="hint">{{ t.update_backup_saved }} <code>instance/backups/{{ status.backup }}</code></p>{% endif %}
+    </div>
+    {% elif status and status.state == 'done' and status.restart_needed %}
+    <div class="settings-warning"><p>{{ t.update_manual_restart }}</p></div>
+    {% endif %}
+
+    {% if not info.enabled %}
+        <p class="hint">{{ t.update_disabled }}</p>
+    {% elif info.available and not running %}
+        <section class="update-release">
+            <h2>{{ t.update_new_version.format(version=info.release.version) }}</h2>
+            {% if info.release.published %}<p class="hint">{{ t.update_published }} <span data-utc-format="date" data-utc="{{ info.release.published }}">{{ info.release.published[:10] }}</span></p>{% endif %}
+            <h3>{{ t.update_whats_new }}</h3>
+            <div class="release-notes">{% if info.release.notes %}{{ render_notes(info.release.notes) }}{% else %}{{ t.update_no_notes }}{% endif %}</div>
+            {% if info.release.url %}<p><a href="{{ info.release.url }}" rel="noopener">{{ t.update_on_github }}</a></p>{% endif %}
+
+            <p class="hint">{{ t.update_polls_safe }}</p>
+            {% for key in problems %}
+            <p class="settings-warning">{{ t[key] }}</p>
+            {% endfor %}
+
+            <div class="update-actions">
+                <form method="POST" action="{{ url_for('update.install') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="tag" value="{{ info.release.tag }}">
+                    <button type="submit" class="btn btn-primary" {{ 'disabled' if problems }}>{{ t.update_install }}</button>
+                </form>
+                {% if not info.skipped %}
+                <form method="POST" action="{{ url_for('update.skip') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="tag" value="{{ info.release.tag }}">
+                    <button type="submit" class="btn btn-outline">{{ t.update_skip }}</button>
+                </form>
+                {% else %}
+                <span class="hint">{{ t.update_is_skipped }}</span>
+                {% endif %}
+            </div>
+        </section>
+    {% elif not running %}
+        <p>{{ t.update_none }}</p>
+    {% endif %}
+
+    {% if info.enabled and not running %}
+    <form method="POST" action="{{ url_for('update.check') }}" class="settings-test">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if info.error %}<p class="hint">{{ t.update_check_failed }} {{ info.error }}</p>{% endif %}
+        <button type="submit" class="btn btn-outline">{{ t.update_check_now }}</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

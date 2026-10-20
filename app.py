@@ -96,12 +96,14 @@ def create_app():
     from routes.vote import vote_bp
     from routes.about import about_bp
     from routes.settings import settings_bp
+    from routes.update import update_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(polls_bp)
     app.register_blueprint(vote_bp)
     app.register_blueprint(about_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(update_bp)
 
     # Create tables
     with app.app_context():

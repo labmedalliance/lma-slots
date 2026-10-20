@@ -26,7 +26,7 @@ def admin_required(f):
             return redirect(url_for('auth.login'))
         user = User.query.get(session['user_id'])
         if not user or not user.is_admin:
-            flash(g.t.get('admin_required', 'Nur Admins.'), 'error')
+            flash(g.t.get('admin_required', 'Admins only.'), 'error')
             return redirect(url_for('polls.index'))
         return f(*args, **kwargs)
     return decorated

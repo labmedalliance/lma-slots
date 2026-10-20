@@ -14,6 +14,7 @@ Powered by [LabMed Alliance](https://labmedalliance.com).
 - German and English UI
 - Admin and staff roles, user management, optional e-mail notification on new votes
 - Settings page for admins: public address, default language, own name and logo, SMTP with test mail
+- In-app updates: icon for new releases, release notes, install or skip; polls are not affected
 - CSRF protection, rate limiting on login and voting, unguessable poll links
 
 ## Quick start
@@ -53,6 +54,7 @@ page falls back to the environment variable, then to the default.
 | `ORG_NAME` | Organization name shown in the header instead of "LMA Slots". |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Optional mail notifications to poll owners. |
 | `SETTINGS_KEY` | Key for encrypting the SMTP password saved on the settings page. Default: `instance/.settings_key`. |
+| `UPDATE_CHECK` | `off` disables the update check. Default: on. |
 | `SMTP_SECURITY` | `starttls`, `ssl` or `none`. Default: `starttls` when user and password are set. |
 
 An SMTP password saved on the settings page is stored encrypted (Fernet, AES-128 + HMAC) in the database. The key
@@ -60,6 +62,30 @@ comes from `SETTINGS_KEY` or, if unset, from `instance/.settings_key`, created o
 alone does not reveal the password. Anyone with access to both the database and the key can decrypt it, so for
 real separation set `SETTINGS_KEY` in your process manager: `instance/` holds the database *and* the key file, and
 backups usually include both. If the key changes, the settings page asks you to enter the password again.
+
+### Updates
+
+Admins see an icon in the header when a new release is out. It opens `/admin/update` with the release notes and
+two buttons: **Install** and **Skip this update**. A skipped version hides the icon until the next release.
+
+Installing runs in the background and takes a few seconds:
+
+1. backs up the database to `instance/backups/` (the last 10 backups are kept),
+2. fetches the release tag from `SOURCE_URL` and checks it out,
+3. installs the requirements if they changed (with `uv`, else `pip`),
+4. test-imports the new version, and restores the previous one if anything fails,
+5. sends `HUP` to gunicorn, which starts new workers and lets the old ones finish their requests.
+
+Polls, votes, users, settings and sessions live in `instance/`, which git never touches, so running polls continue
+unchanged. Schema changes of a new version are additive and applied on start.
+
+Requirements: the app was installed with `git clone`, its tracked files are unchanged, and it runs under gunicorn
+(otherwise the update page asks you to restart the app yourself). Set `UPDATE_CHECK=off` to disable the check; the
+app then never contacts GitHub. The check runs at most every 6 hours; GitHub sees the server's IP address and, in
+the `User-Agent` header, the app name and version.
+
+**Publishing a release** (maintainers): bump `VERSION` in `attribution.py`, push, tag `vX.Y.Z` and create a GitHub
+release for that tag. The release text is shown as the update notes.
 
 ### Your own name and logo
 

@@ -26,7 +26,7 @@ own credits next to it — do not remove or hide the original ones.
 """
 
 APP_NAME = 'LMA Slots'
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 
 AUTHOR = 'Janne Cadamuro'
 ORGANIZATION = 'LabMed Alliance Inc.'
