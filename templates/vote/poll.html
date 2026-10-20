@@ -1,0 +1,512 @@
+{% extends "base.html" %}
+{% block title %}{{ poll.title }} — {{ t.vote_title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>{{ poll.title }}</h1>
+    {% if poll.description %}
+        <p class="poll-description">{{ poll.description }}</p>
+    {% endif %}
+
+    <div class="timezone-banner" id="vote-timezone-banner">
+        🕐 {{ t.times_shown_in }}: <strong><span id="vote-timezone-label"></span></strong>
+    </div>
+
+    {% if poll.is_closed %}
+        {% if poll.chosen_option %}
+            <div class="chosen-date-box">
+                <strong>{{ t.chosen_date }}:</strong>
+                <span data-utc="{{ poll.chosen_option.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="datetime">{{ poll.chosen_option.datetime.strftime('%d.%m.%Y %H:%M') }}</span>
+                {% if poll.duration %}
+                    – <span data-utc="{{ poll.chosen_option.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="time" data-utc-add-minutes="{{ poll.duration }}">{{ poll.chosen_option.datetime.strftime('%H:%M') }}</span>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="flash flash-warning">{{ t.poll_closed }}</div>
+        {% endif %}
+    {% endif %}
+
+    <!-- Vote Form -->
+    {% if not poll.is_closed %}
+        <div class="vote-form-section">
+            <h2>{{ t.vote_or_update }}</h2>
+            <form method="POST" id="vote-form">
+                <div class="form-group">
+                    <label for="participant_name">{{ t.your_name }} *</label>
+                    <input type="text" id="participant_name" name="participant_name" required
+                           placeholder="{{ t.your_name }}">
+                </div>
+
+                <!-- View Toggle -->
+                <div class="view-toggle">
+                    <button type="button" class="view-toggle-btn active" data-view="calendar">{{ t.calendar_view }}</button>
+                    <button type="button" class="view-toggle-btn" data-view="table">{{ t.table_view }}</button>
+                </div>
+
+                <!-- Calendar Vote View -->
+                <div id="vote-calendar-view" class="vote-view">
+                    <div class="calendar-nav">
+                        <button type="button" id="vcal-prev" class="btn btn-sm btn-outline">&larr;</button>
+                        <span id="vcal-week-label" class="cal-week-label"></span>
+                        <button type="button" id="vcal-next" class="btn btn-sm btn-outline">&rarr;</button>
+                    </div>
+                    <div class="calendar-grid-wrapper">
+                        <div class="vote-calendar-container" id="vote-calendar-container">
+                        </div>
+                    </div>
+                    <div id="vcal-week-hint" class="week-hint" style="display:none;"></div>
+                    <div class="vote-legend">
+                        <span class="legend-item"><span class="legend-icon vote-icon-yes">&#10003;</span> {{ t.yes }}</span>
+                        <span class="legend-item"><span class="legend-icon vote-icon-maybe">?</span> {{ t.maybe }}</span>
+                        <span class="legend-item"><span class="legend-icon vote-icon-default">&ndash;</span> {{ t.no }}</span>
+                    </div>
+                </div>
+
+                <!-- Table Vote View (hidden by default) -->
+                <div id="vote-table-view" class="vote-view" style="display:none;">
+                    <div class="table-responsive">
+                        <table class="vote-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ t.date }}</th>
+                                    <th class="vote-choice-header">&#10003;</th>
+                                    <th class="vote-choice-header">?</th>
+                                    <th class="vote-choice-header">&ndash;</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for opt in poll.options %}
+                                    <tr>
+                                        <td>
+                                            <strong><span data-utc="{{ opt.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="date">{{ opt.datetime.strftime('%d.%m.%Y') }}</span></strong><br>
+                                            <small><span data-utc="{{ opt.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="time">{{ opt.datetime.strftime('%H:%M') }}</span>{% if poll.duration %} – <span data-utc="{{ opt.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="time" data-utc-add-minutes="{{ poll.duration }}">{{ opt.datetime | add_minutes(poll.duration) }}</span>{% endif %}</small>
+                                        </td>
+                                        <td class="vote-radio">
+                                            <input type="radio" name="choice_{{ opt.id }}" value="yes" id="yes_{{ opt.id }}">
+                                            <label for="yes_{{ opt.id }}" class="vote-label vote-label-yes">&#10003;</label>
+                                        </td>
+                                        <td class="vote-radio">
+                                            <input type="radio" name="choice_{{ opt.id }}" value="maybe" id="maybe_{{ opt.id }}">
+                                            <label for="maybe_{{ opt.id }}" class="vote-label vote-label-maybe">?</label>
+                                        </td>
+                                        <td class="vote-radio">
+                                            <input type="radio" name="choice_{{ opt.id }}" value="no" id="no_{{ opt.id }}" checked>
+                                            <label for="no_{{ opt.id }}" class="vote-label vote-label-no">&ndash;</label>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">{{ t.vote_submit }}</button>
+            </form>
+        </div>
+    {% endif %}
+
+    <!-- Results -->
+    {% if participants %}
+        <h2>{{ t.results }} ({{ participants | length }} {{ t.participants }})</h2>
+        <div class="table-responsive">
+            <table class="result-table">
+                <thead>
+                    <tr>
+                        <th>{{ t.participants }}</th>
+                        {% for opt in poll.options %}
+                            <th class="{% if best_option and opt.id == best_option.id %}best-option{% endif %}">
+                                <span data-utc="{{ opt.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="date-short">{{ opt.datetime.strftime('%d.%m') }}</span><br>
+                                <small><span data-utc="{{ opt.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="time">{{ opt.datetime.strftime('%H:%M') }}</span></small>
+                            </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name in participants %}
+                        <tr>
+                            <td class="participant-name">{{ name }}</td>
+                            {% for opt in poll.options %}
+                                {% set choice = matrix[name][opt.id] %}
+                                <td class="vote-cell vote-{{ choice }}">
+                                    {% if choice == 'yes' %}&#10003;
+                                    {% elif choice == 'maybe' %}?
+                                    {% else %}&ndash;{% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td><strong>&#10003;</strong></td>
+                        {% for opt in poll.options %}
+                            {% set yes_count = opt.votes | selectattr('choice', 'equalto', 'yes') | list | length %}
+                            <td class="{% if best_option and opt.id == best_option.id %}best-option{% endif %}">
+                                <strong>{{ yes_count }}</strong>
+                            </td>
+                        {% endfor %}
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        {% if best_option %}
+            <div class="best-option-box">
+                {{ t.best_option }}: <strong><span data-utc="{{ best_option.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="datetime">{{ best_option.datetime.strftime('%d.%m.%Y %H:%M') }}</span></strong>
+            </div>
+        {% endif %}
+    {% else %}
+        {% if not poll.is_closed %}
+            <p class="empty-state">{{ t.no_votes }}</p>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var pollOptions = [
+        {% for opt in poll.options %}
+        { id: {{ opt.id }}, datetime: utcToLocalSlot('{{ opt.datetime.strftime("%Y-%m-%dT%H:%M") }}Z') },
+        {% endfor %}
+    ];
+    var duration = {{ poll.duration or 60 }};
+    var rowsPerSlot = Math.ceil(duration / 15);
+
+    var choices = {};
+    pollOptions.forEach(function(opt) { choices[opt.id] = 'no'; });
+
+    var cycleOrder = ['no', 'yes', 'maybe'];
+
+    // === View Toggle ===
+    document.querySelectorAll('.view-toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.view-toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            var view = btn.dataset.view;
+            document.getElementById('vote-calendar-view').style.display = view === 'calendar' ? '' : 'none';
+            document.getElementById('vote-table-view').style.display = view === 'table' ? '' : 'none';
+        });
+    });
+
+    function syncToTable() {
+        pollOptions.forEach(function(opt) {
+            var radio = document.getElementById(choices[opt.id] + '_' + opt.id);
+            if (radio) radio.checked = true;
+        });
+    }
+
+    function syncFromTable() {
+        pollOptions.forEach(function(opt) {
+            ['yes', 'no', 'maybe'].forEach(function(val) {
+                var radio = document.getElementById(val + '_' + opt.id);
+                if (radio && radio.checked) choices[opt.id] = val;
+            });
+        });
+        renderVoteCalendar();
+    }
+
+    document.querySelectorAll('.vote-table input[type="radio"]').forEach(function(radio) {
+        radio.addEventListener('change', syncFromTable);
+    });
+
+    // === Vote Calendar ===
+    var container = document.getElementById('vote-calendar-container');
+    if (!container) return;
+
+    var vWeekOffset = 0;
+
+    function getMonday(date) {
+        var d = new Date(date);
+        var day = d.getDay();
+        var diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        d.setDate(diff);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+
+    if (pollOptions.length > 0) {
+        var firstDate = new Date(pollOptions[0].datetime);
+        var now0 = new Date();
+        var diffDays = Math.floor((firstDate - getMonday(now0)) / 86400000);
+        vWeekOffset = Math.floor(diffDays / 7);
+    }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function formatDate(d) { return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1); }
+    function formatDateISO(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+    function dayNames() {
+        return '{{ lang }}' === 'de'
+            ? ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+            : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    }
+    function timeStr(h, m) { return pad2(h) + ':' + pad2(m); }
+    function endTimeStr(h, m) {
+        var total = h * 60 + m + duration;
+        return pad2(Math.floor(total / 60)) + ':' + pad2(total % 60);
+    }
+
+    // Parse option into {id, date, startMin, endMin}
+    function parseOpt(opt) {
+        var parts = opt.datetime.split('T');
+        var tp = parts[1].split(':');
+        var h = parseInt(tp[0]), m = parseInt(tp[1]);
+        var startMin = h * 60 + m;
+        return { id: opt.id, date: parts[0], h: h, m: m, startMin: startMin, endMin: startMin + duration };
+    }
+
+    // Find hour range
+    var minHour = 23, maxHour = 0;
+    pollOptions.forEach(function(opt) {
+        var p = parseOpt(opt);
+        if (p.h < minHour) minHour = p.h;
+        var endH = Math.ceil(p.endMin / 60);
+        if (endH > maxHour) maxHour = endH;
+    });
+    if (minHour > maxHour) { minHour = 8; maxHour = 18; }
+    minHour = Math.max(0, minHour);
+    maxHour = Math.min(24, maxHour);
+
+    var totalRows = (maxHour - minHour) * 4;
+
+    // === Overlap detection ===
+    // For a given day, find overlap groups and assign column index + total columns
+    function computeOverlapLayout(dayOpts) {
+        if (dayOpts.length === 0) return [];
+
+        // Sort by start time
+        dayOpts.sort(function(a, b) { return a.startMin - b.startMin; });
+
+        // Assign columns using greedy algorithm
+        var columns = []; // each column is array of assigned opts (with end times)
+        var result = {}; // optId -> {colIdx, totalCols}
+
+        dayOpts.forEach(function(opt) {
+            var placed = false;
+            for (var c = 0; c < columns.length; c++) {
+                // Check if this column is free (last item ends before this starts)
+                var lastEnd = columns[c][columns[c].length - 1].endMin;
+                if (opt.startMin >= lastEnd) {
+                    columns[c].push(opt);
+                    result[opt.id] = { colIdx: c };
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                columns.push([opt]);
+                result[opt.id] = { colIdx: columns.length - 1 };
+            }
+        });
+
+        // Now find connected overlap groups to determine totalCols per block
+        // Build overlap graph
+        var groups = []; // array of sets of opt ids
+        dayOpts.forEach(function(opt) {
+            var myGroup = null;
+            for (var g = 0; g < groups.length; g++) {
+                var overlaps = false;
+                groups[g].forEach(function(existingOpt) {
+                    if (opt.startMin < existingOpt.endMin && opt.endMin > existingOpt.startMin) {
+                        overlaps = true;
+                    }
+                });
+                if (overlaps) {
+                    if (myGroup === null) {
+                        myGroup = g;
+                        groups[g].push(opt);
+                    } else {
+                        // Merge groups
+                        groups[myGroup] = groups[myGroup].concat(groups[g]);
+                        groups.splice(g, 1);
+                        g--;
+                    }
+                }
+            }
+            if (myGroup === null) {
+                groups.push([opt]);
+            }
+        });
+
+        // For each group, find max columns used
+        groups.forEach(function(group) {
+            var maxCol = 0;
+            group.forEach(function(opt) {
+                if (result[opt.id].colIdx > maxCol) maxCol = result[opt.id].colIdx;
+            });
+            var totalCols = maxCol + 1;
+            group.forEach(function(opt) {
+                result[opt.id].totalCols = totalCols;
+            });
+        });
+
+        return result;
+    }
+
+    function renderVoteCalendar() {
+        var now = new Date();
+        var monday = getMonday(now);
+        monday.setDate(monday.getDate() + vWeekOffset * 7);
+        var sunday = new Date(monday);
+        sunday.setDate(sunday.getDate() + 6);
+        var days = dayNames();
+
+        document.getElementById('vcal-week-label').textContent =
+            formatDate(monday) + ' \u2014 ' + formatDate(sunday) + '.' + sunday.getFullYear();
+
+        // Group options by day index (0-6) for this week
+        var dayOptionsMap = {}; // dayIdx -> [parsed opts]
+        var weekDates = [];
+        for (var d = 0; d < 7; d++) {
+            var day = new Date(monday);
+            day.setDate(day.getDate() + d);
+            weekDates.push(formatDateISO(day));
+            dayOptionsMap[d] = [];
+        }
+
+        pollOptions.forEach(function(opt) {
+            var p = parseOpt(opt);
+            var dayIdx = weekDates.indexOf(p.date);
+            if (dayIdx !== -1) {
+                dayOptionsMap[dayIdx].push(p);
+            }
+        });
+
+        // Compute overlap layouts per day
+        var overlapLayouts = {};
+        for (var d = 0; d < 7; d++) {
+            var layout = computeOverlapLayout(dayOptionsMap[d]);
+            for (var id in layout) {
+                overlapLayouts[id] = layout[id];
+            }
+        }
+
+        // Build grid
+        var html = '<div class="vcal-grid" style="grid-template-rows: auto repeat(' + totalRows + ', 28px);">';
+
+        // Header
+        html += '<div class="vcal-time-header"></div>';
+        for (var d = 0; d < 7; d++) {
+            var day = new Date(monday);
+            day.setDate(day.getDate() + d);
+            var isToday = formatDateISO(day) === formatDateISO(now);
+            html += '<div class="cal-header-cell' + (isToday ? ' cal-today' : '') + '">' +
+                    days[d] + '<br><span class="cal-date-num">' + formatDate(day) + '</span></div>';
+        }
+
+        // Background grid
+        for (var r = 0; r < totalRows; r++) {
+            var h = minHour + Math.floor(r / 4);
+            var m = (r % 4) * 15;
+            var gridRow = r + 2;
+
+            html += '<div class="vcal-time-label" style="grid-row:' + gridRow + '; grid-column:1;">' +
+                    (m === 0 ? timeStr(h, 0) : '') + '</div>';
+
+            for (var d = 0; d < 7; d++) {
+                html += '<div class="vcal-bg-cell' + (r % 4 === 0 ? ' vcal-hour-border' : '') +
+                        '" style="grid-row:' + gridRow + '; grid-column:' + (d + 2) + ';"></div>';
+            }
+        }
+
+        // Place blocks with overlap handling
+        pollOptions.forEach(function(opt) {
+            var p = parseOpt(opt);
+            var dayIdx = weekDates.indexOf(p.date);
+            if (dayIdx === -1) return;
+
+            var startRow = ((p.h - minHour) * 4 + Math.floor(p.m / 15)) + 2;
+            var choice = choices[opt.id] || 'no';
+            var icon, cls;
+            if (choice === 'yes') { icon = '&#10003;'; cls = 'vote-block-yes'; }
+            else if (choice === 'maybe') { icon = '?'; cls = 'vote-block-maybe'; }
+            else { icon = '&ndash;'; cls = 'vote-block-default'; }
+
+            var fromStr = timeStr(p.h, p.m);
+            var toStr = endTimeStr(p.h, p.m);
+
+            // Overlap positioning via margin/width
+            var layout = overlapLayouts[opt.id] || { colIdx: 0, totalCols: 1 };
+            var widthPct = (100 / layout.totalCols);
+            var leftPct = (layout.colIdx * widthPct);
+
+            var style = 'grid-row:' + startRow + ' / span ' + rowsPerSlot + '; ' +
+                        'grid-column:' + (dayIdx + 2) + '; ' +
+                        'width:' + widthPct + '%; ' +
+                        'margin-left:' + leftPct + '%;';
+
+            html += '<div class="vote-block ' + cls + '" ' +
+                    'style="' + style + '" ' +
+                    'data-opt-id="' + opt.id + '" title="' + fromStr + '–' + toStr + '">' +
+                    '<span class="vote-block-from">' + fromStr + '</span>' +
+                    '<span class="vote-block-icon">' + icon + '</span>' +
+                    '<span class="vote-block-to">' + toStr + '</span>' +
+                    '</div>';
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+
+        // Show week navigation hint if options span multiple weeks
+        var hintEl = document.getElementById('vcal-week-hint');
+        var weekSet = {};
+        pollOptions.forEach(function(opt) {
+            var d = new Date(opt.datetime);
+            var mon = getMonday(d);
+            var key = formatDateISO(mon);
+            var sun = new Date(mon);
+            sun.setDate(sun.getDate() + 6);
+            weekSet[key] = { monday: mon, sunday: sun };
+        });
+        var weekKeys = Object.keys(weekSet).sort();
+        if (weekKeys.length > 1) {
+            var currentMondayKey = formatDateISO(monday);
+            var parts = [];
+            weekKeys.forEach(function(key) {
+                var w = weekSet[key];
+                var label = formatDate(w.monday) + '–' + formatDate(w.sunday);
+                var isCurrent = (key === currentMondayKey);
+                parts.push(isCurrent
+                    ? '<span class="week-hint-current">' + label + '</span>'
+                    : '<button type="button" class="week-hint-link" data-offset="' + key + '">' + label + ' &rarr;</button>');
+            });
+            hintEl.innerHTML = '{{ t.more_weeks }}: ' + parts.join(' ');
+            hintEl.style.display = '';
+        } else {
+            hintEl.style.display = 'none';
+        }
+    }
+
+    // Click to cycle
+    container.addEventListener('click', function(e) {
+        var block = e.target.closest('.vote-block');
+        if (!block) return;
+        var optId = parseInt(block.dataset.optId);
+        var current = choices[optId] || 'no';
+        var idx = cycleOrder.indexOf(current);
+        choices[optId] = cycleOrder[(idx + 1) % cycleOrder.length];
+        renderVoteCalendar();
+        syncToTable();
+    });
+
+    // Week nav
+    document.getElementById('vcal-prev').addEventListener('click', function() { vWeekOffset--; renderVoteCalendar(); });
+    document.getElementById('vcal-next').addEventListener('click', function() { vWeekOffset++; renderVoteCalendar(); });
+
+    // Click on week hint links to jump to that week
+    document.getElementById('vcal-week-hint').addEventListener('click', function(e) {
+        var btn = e.target.closest('.week-hint-link');
+        if (!btn) return;
+        var targetMondayStr = btn.dataset.offset;
+        var targetMonday = new Date(targetMondayStr + 'T00:00:00');
+        var now = new Date();
+        var currentMonday = getMonday(now);
+        vWeekOffset = Math.round((targetMonday - currentMonday) / (7 * 86400000));
+        renderVoteCalendar();
+    });
+
+    renderVoteCalendar();
+})();
+</script>
+{% endblock %}

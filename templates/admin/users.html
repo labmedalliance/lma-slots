@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ t.user_management }} — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>{{ t.user_management }}</h1>
+        <a href="{{ url_for('auth.user_create') }}" class="btn btn-primary">+ {{ t.new_user }}</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="result-table">
+            <thead>
+                <tr>
+                    <th style="text-align:left">{{ t.username }}</th>
+                    <th style="text-align:left">{{ t.email }}</th>
+                    <th>{{ t.role }}</th>
+                    <th>{{ t.created }}</th>
+                    <th>{{ t.actions }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                    <tr>
+                        <td class="participant-name">{{ u.username }}</td>
+                        <td style="text-align:left;font-size:0.75rem;color:var(--color-text-muted)">{{ u.email or '–' }}</td>
+                        <td>
+                            <span class="badge {% if u.is_admin %}badge-admin{% else %}badge-open{% endif %}">
+                                {{ 'Admin' if u.is_admin else 'Staff' }}
+                            </span>
+                        </td>
+                        <td>{{ u.created_at.strftime('%d.%m.%Y') }}</td>
+                        <td>
+                            <a href="{{ url_for('auth.user_edit', user_id=u.id) }}" class="btn btn-sm btn-outline">{{ t.edit_user }}</a>
+                            {% if u.id != session.user_id %}
+                                <form method="POST" action="{{ url_for('auth.user_delete', user_id=u.id) }}" style="display:inline"
+                                      onsubmit="return confirm('{{ t.confirm_delete }}')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">{{ t.delete }}</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <a href="{{ url_for('polls.index') }}" class="btn btn-outline">{{ t.back }}</a>
+</div>
+{% endblock %}

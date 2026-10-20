@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ (t.edit_user if user else t.new_user) }} — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <h1>{{ t.edit_user if user else t.new_user }}</h1>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="username">{{ t.username }}</label>
+            <input type="text" id="username" name="username" required value="{{ user.username if user else '' }}">
+        </div>
+        <div class="form-group">
+            <label for="email">{{ t.email }}</label>
+            <input type="email" id="email" name="email" value="{{ user.email if user else '' }}" placeholder="user@example.com">
+        </div>
+        <div class="form-group">
+            <label for="password">{{ t.password }}{% if user %} ({{ t.leave_empty }}){% endif %}</label>
+            <input type="password" id="password" name="password" {% if not user %}required{% endif %}
+                   {% if not user %}minlength="4"{% endif %}>
+        </div>
+        <div class="form-group">
+            <label for="role">{{ t.role }}</label>
+            <select id="role" name="role">
+                <option value="staff" {{ 'selected' if not user or user.role == 'staff' }}>Staff</option>
+                <option value="admin" {{ 'selected' if user and user.role == 'admin' }}>Admin</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ t.save }}</button>
+        <a href="{{ url_for('auth.user_list') }}" class="btn btn-outline">{{ t.cancel }}</a>
+    </form>
+</div>
+{% endblock %}

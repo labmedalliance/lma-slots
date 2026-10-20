@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t.about }} — {{ brand_name }}{% endblock %}
+{% block content %}
+{# Required by NOTICE (AGPL section 7(b)) and the section 13 source offer - keep it reachable. #}
+<div class="about-page">
+    <a href="{{ app_info.ORGANIZATION_URL }}" rel="noopener" class="about-logo">
+        <img src="{{ url_for('static', filename='img/lma-logo-mark.svg') }}" alt="{{ app_info.ORGANIZATION_SHORT }}" width="64" height="64">
+    </a>
+    <h1>{{ app_info.APP_NAME }} {{ app_info.VERSION }}</h1>
+    <p>{{ t.about_intro }} {{ app_info.AUTHOR }} /
+        <a href="{{ app_info.ORGANIZATION_URL }}" rel="noopener">{{ app_info.ORGANIZATION }}</a>.</p>
+    <p>Copyright &copy; {{ app_info.COPYRIGHT_YEAR }} {{ app_info.COPYRIGHT_HOLDER }}</p>
+    {% if org_name %}
+    <p>{{ t.about_operated_by }} {{ org_name }}.</p>
+    {% endif %}
+
+    <h2>{{ t.about_license }}</h2>
+    <p><a href="{{ app_info.LICENSE_URL }}" rel="noopener">{{ app_info.LICENSE_NAME }}</a> ({{ app_info.LICENSE_SPDX }})</p>
+    <p>{{ t.about_license_text }}</p>
+    <p class="text-muted">{{ t.about_warranty }}</p>
+
+    <h2>{{ t.about_source }}</h2>
+    <p>{{ t.about_source_text }} <a href="{{ app_info.SOURCE_URL }}" rel="noopener">{{ app_info.SOURCE_URL }}</a></p>
+</div>
+{% endblock %}
