@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ t.my_polls }} — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>{{ t.my_polls }}</h1>
+        <a href="{{ url_for('polls.create') }}" class="btn btn-primary">+ {{ t.new_poll }}</a>
+    </div>
+
+    {% if polls %}
+        <div class="poll-list">
+            {% for poll in polls %}
+                <div class="poll-card">
+                    <div class="poll-card-header">
+                        <h3><a href="{{ url_for('polls.detail', poll_id=poll.id) }}">{{ poll.title }}</a></h3>
+                        <span class="badge {% if poll.is_closed %}badge-closed{% else %}badge-open{% endif %}">
+                            {{ t.closed if poll.is_closed else t.open }}
+                        </span>
+                    </div>
+                    <div class="poll-card-meta">
+                        <span>{{ poll.options | length }} {{ t.poll_options }}</span>
+                        <span>{{ poll.participants() | length }} {{ t.participants }}</span>
+                        <span data-utc="{{ poll.created_at.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="date">{{ poll.created_at.strftime('%d.%m.%Y') }}</span>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">{{ t.no_polls }}</p>
+    {% endif %}
+</div>
+{% endblock %}

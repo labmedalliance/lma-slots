@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}{{ poll.title }} — {{ brand_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div>
+            <h1>{{ poll.title }}</h1>
+            {% if poll.description %}
+                <p class="poll-description">{{ poll.description }}</p>
+            {% endif %}
+        </div>
+        <span class="badge {% if poll.is_closed %}badge-closed{% else %}badge-open{% endif %}">
+            {{ t.closed if poll.is_closed else t.open }}
+        </span>
+    </div>
+
+    <!-- Share Link -->
+    <div class="share-box">
+        <label>{{ t.share_link }}:</label>
+        <div class="share-link-row">
+            <input type="text" value="{{ share_url }}" id="share-url" readonly>
+            <div class="share-lang-toggle">
+                <button type="button" class="share-lang-btn active" data-lang="">—</button>
+                <button type="button" class="share-lang-btn" data-lang="de">DE</button>
+                <button type="button" class="share-lang-btn" data-lang="en">EN</button>
+            </div>
+            <button type="button" class="btn btn-sm btn-primary" onclick="copyLink()">{{ t.copy_link }}</button>
+        </div>
+    </div>
+
+    <!-- Chosen Date Banner -->
+    {% if poll.is_closed and poll.chosen_option %}
+        <div class="chosen-date-box">
+            <strong>{{ t.chosen_date }}:</strong>
+            <span data-utc="{{ poll.chosen_option.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="datetime">{{ poll.chosen_option.datetime.strftime('%d.%m.%Y %H:%M') }}</span>
+            {% if poll.duration %}
+                – <span data-utc="{{ poll.chosen_option.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="time" data-utc-add-minutes="{{ poll.duration }}">{{ poll.chosen_option.datetime.strftime('%H:%M') }}</span>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <!-- Results Matrix -->
+    {% if participants %}
+        <h2>{{ t.results }} ({{ participants | length }} {{ t.participants }})</h2>
+        <div class="table-responsive">
+            <table class="result-table">
+                <thead>
+                    <tr>
+                        <th>{{ t.participants }}</th>
+                        {% for opt in poll.options %}
+                            {% set best = poll.best_option() %}
+                            <th class="{% if opt.id == best.id %}best-option{% endif %}{% if poll.chosen_option and opt.id == poll.chosen_option_id %} chosen-option{% endif %}">
+                                <span data-utc="{{ opt.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="date">{{ opt.datetime.strftime('%d.%m.%Y') }}</span><br>
+                                <small><span data-utc="{{ opt.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="time">{{ opt.datetime.strftime('%H:%M') }}</span></small>
+                            </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name in participants %}
+                        <tr>
+                            <td class="participant-name">{{ name }}</td>
+                            {% for opt in poll.options %}
+                                {% set choice = matrix[name][opt.id] %}
+                                <td class="vote-cell vote-{{ choice }}{% if poll.chosen_option and opt.id == poll.chosen_option_id %} chosen-option{% endif %}">
+                                    {% if choice == 'yes' %}&#10003;
+                                    {% elif choice == 'maybe' %}?
+                                    {% else %}&ndash;{% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td><strong>&#10003;</strong></td>
+                        {% for opt in poll.options %}
+                            {% set yes_count = opt.votes | selectattr('choice', 'equalto', 'yes') | list | length %}
+                            {% set best = poll.best_option() %}
+                            <td class="{% if opt.id == best.id %}best-option{% endif %}{% if poll.chosen_option and opt.id == poll.chosen_option_id %} chosen-option{% endif %}">
+                                <strong>{{ yes_count }}</strong>
+                            </td>
+                        {% endfor %}
+                    </tr>
+                    {% if not poll.is_closed %}
+                        <tr class="choose-row">
+                            <td><strong>{{ t.choose_and_close }}</strong></td>
+                            {% for opt in poll.options %}
+                                <td>
+                                    <form method="POST" action="{{ url_for('polls.choose_and_close', poll_id=poll.id, option_id=opt.id) }}" style="display:inline"
+                                          onsubmit="return confirm('{{ t.confirm_choose_close }}')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-success">{{ t.choose_this }}</button>
+                                    </form>
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endif %}
+                </tfoot>
+            </table>
+        </div>
+
+        {% set best = poll.best_option() %}
+        {% if best and not poll.chosen_option %}
+            <div class="best-option-box">
+                {{ t.best_option }}: <strong><span data-utc="{{ best.datetime.strftime('%Y-%m-%dT%H:%M') }}Z" data-utc-format="datetime">{{ best.datetime.strftime('%d.%m.%Y %H:%M') }}</span></strong>
+            </div>
+        {% endif %}
+    {% else %}
+        <p class="empty-state">{{ t.no_votes }}</p>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="poll-actions">
+        <a href="{{ url_for('polls.edit', poll_id=poll.id) }}" class="btn btn-outline">{{ t.edit_poll }}</a>
+        <form method="POST" action="{{ url_for('polls.close', poll_id=poll.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline">
+                {{ t.reopen_poll if poll.is_closed else t.close_poll }}
+            </button>
+        </form>
+        <form method="POST" action="{{ url_for('polls.delete', poll_id=poll.id) }}" style="display:inline"
+              onsubmit="return confirm('{{ t.confirm_delete }}')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger">{{ t.delete_poll }}</button>
+        </form>
+        <a href="{{ url_for('polls.index') }}" class="btn btn-outline">{{ t.back }}</a>
+    </div>
+</div>
+
+<script>
+var baseShareUrl = '{{ share_url }}';
+var shareInput = document.getElementById('share-url');
+
+document.querySelectorAll('.share-lang-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.share-lang-btn').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        var lang = btn.dataset.lang;
+        shareInput.value = lang ? baseShareUrl + '?lang=' + lang : baseShareUrl;
+    });
+});
+
+function copyLink() {
+    shareInput.select();
+    navigator.clipboard.writeText(shareInput.value);
+    var copyBtn = document.querySelector('.share-link-row .btn-primary');
+    copyBtn.textContent = '{{ t.link_copied }}';
+    setTimeout(function() { copyBtn.textContent = '{{ t.copy_link }}'; }, 2000);
+}
+</script>
+{% endblock %}
