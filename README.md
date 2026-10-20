@@ -22,25 +22,30 @@ Powered by [LabMed Alliance](https://labmedalliance.com).
 Requires Python 3.10 or later.
 
 ```bash
-git clone https://github.com/labmedalliance/lma-slots.git
+git clone --branch v1.1.0 https://github.com/labmedalliance/lma-slots.git   # latest release
 cd lma-slots
 uv venv && uv pip install -r requirements.txt
 .venv/bin/python init_admin.py <username> <password>
 .venv/bin/flask --app app run --port 8110   # http://127.0.0.1:8110
 ```
 
-For production, run it behind a reverse proxy with gunicorn:
+For production, run it behind a reverse proxy with gunicorn, started by your process manager (systemd,
+supervisord, …):
 
 ```bash
 .venv/bin/gunicorn -w 2 -b 127.0.0.1:8110 app:app
 ```
 
-The SQLite database (`instance/doodle.db`) and sessions live in `instance/`, which is never committed.
+Install with `git clone` and run under gunicorn to get one-click updates (see [Updates](#updates)).
+
+The SQLite database (`instance/doodle.db`), sessions, uploaded logo and backups live in `instance/`, which is never
+committed. Back up this folder; it is all the state the app has.
 
 ## Configuration
 
 Admins set the most important options on the **Settings** page (`/admin/settings`): public address, default
-language, organization name and logo, and SMTP, including a test mail. Values saved there take precedence over environment variables.
+language, organization name and logo, and SMTP, including a test mail. Values saved there take precedence over
+environment variables.
 
 Everything can also be set through environment variables; see [`.env.example`](.env.example). The app does not
 read `.env` itself, so set them in your process manager (systemd, supervisord, …). An empty field on the settings
@@ -54,38 +59,14 @@ page falls back to the environment variable, then to the default.
 | `ORG_NAME` | Organization name shown in the header instead of "LMA Slots". |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Optional mail notifications to poll owners. |
 | `SETTINGS_KEY` | Key for encrypting the SMTP password saved on the settings page. Default: `instance/.settings_key`. |
-| `UPDATE_CHECK` | `off` disables the update check. Default: on. |
 | `SMTP_SECURITY` | `starttls`, `ssl` or `none`. Default: `starttls` when user and password are set. |
+| `UPDATE_CHECK` | `off` disables the update check, so the app never contacts GitHub. Default: on. |
 
 An SMTP password saved on the settings page is stored encrypted (Fernet, AES-128 + HMAC) in the database. The key
 comes from `SETTINGS_KEY` or, if unset, from `instance/.settings_key`, created on first use. A copy of the database
 alone does not reveal the password. Anyone with access to both the database and the key can decrypt it, so for
 real separation set `SETTINGS_KEY` in your process manager: `instance/` holds the database *and* the key file, and
 backups usually include both. If the key changes, the settings page asks you to enter the password again.
-
-### Updates
-
-Admins see an icon in the header when a new release is out. It opens `/admin/update` with the release notes and
-two buttons: **Install** and **Skip this update**. A skipped version hides the icon until the next release.
-
-Installing runs in the background and takes a few seconds:
-
-1. backs up the database to `instance/backups/` (the last 10 backups are kept),
-2. fetches the release tag from `SOURCE_URL` and checks it out,
-3. installs the requirements if they changed (with `uv`, else `pip`),
-4. test-imports the new version, and restores the previous one if anything fails,
-5. sends `HUP` to gunicorn, which starts new workers and lets the old ones finish their requests.
-
-Polls, votes, users, settings and sessions live in `instance/`, which git never touches, so running polls continue
-unchanged. Schema changes of a new version are additive and applied on start.
-
-Requirements: the app was installed with `git clone`, its tracked files are unchanged, and it runs under gunicorn
-(otherwise the update page asks you to restart the app yourself). Set `UPDATE_CHECK=off` to disable the check; the
-app then never contacts GitHub. The check runs at most every 6 hours; GitHub sees the server's IP address and, in
-the `User-Agent` header, the app name and version.
-
-**Publishing a release** (maintainers): bump `VERSION` in `attribution.py`, push, tag `vX.Y.Z` and create a GitHub
-release for that tag. The release text is shown as the update notes.
 
 ### Your own name and logo
 
@@ -95,6 +76,66 @@ Both replace "LMA Slots" and the LMA mark in the header and in the page titles. 
 
 Branding set this way does not count as a modification (NOTICE, term 4): the instance remains an unmodified copy
 of LMA Slots, with no need to rename it or replace the icons.
+
+## Updates
+
+Admins see an update icon in the header, next to **Users**. When a new release is out, it turns blue and gets a
+red dot. The icon opens `/admin/update`, which shows the installed version, the release notes and two buttons:
+
+- **Install** installs the new version.
+- **Skip this update** hides the red dot until the next release. You can still install a skipped version from the
+  update page.
+
+**Check now** asks GitHub right away; otherwise the app checks at most every 6 hours.
+
+### What happens when you install
+
+Installing runs in the background and takes a few seconds. The page shows each step:
+
+1. The database is backed up to `instance/backups/`; the last 10 backups are kept.
+2. The release tag is fetched from `SOURCE_URL` and checked out.
+3. The requirements are installed if they changed, with `uv` or else `pip`.
+4. The new version is test-imported. If any step fails, the previous version is restored and the app keeps running.
+5. Gunicorn gets a `HUP` signal: it starts workers with the new code and lets the old ones finish their requests.
+
+Running polls are not affected. Polls, votes, users, settings and sessions live in `instance/`, which git never
+touches, and logged-in users stay logged in. Schema changes of a new version are additive and applied on start.
+
+### Requirements
+
+- The app was installed with `git clone`.
+- Its tracked files are unchanged. Local edits block the update, so they are never overwritten.
+- It runs under gunicorn. Otherwise the update is installed, and the update page asks you to restart the app.
+
+GitHub sees your server's IP address and, in the `User-Agent` header, the app name and version. Set
+`UPDATE_CHECK=off` to turn the check off.
+
+### Updating by hand
+
+```bash
+cp instance/doodle.db instance/doodle.db.bak
+git fetch --tags && git checkout v1.1.0          # the new release
+uv pip install -r requirements.txt
+# then restart the app in your process manager
+```
+
+### Publishing a release (maintainers)
+
+1. Bump `VERSION` in `attribution.py`, add the version to the [changelog](#changelog) and update the tag in
+   the quick start.
+2. Push, then tag: `git tag -a vX.Y.Z -m "LMA Slots X.Y.Z" && git push origin vX.Y.Z`.
+3. Create a GitHub release for the tag. Its text is what admins see under *What's new*.
+
+## Changelog
+
+### 1.1.0
+
+- In-app updates: update icon for admins, release notes, install or skip, database backup and automatic rollback.
+
+### 1.0.0
+
+- First public release: scheduling polls, AGPL-3.0 licence with LabMed Alliance attribution, settings page with
+  encrypted SMTP password, organization name and logo.
 
 ## Who built it
 
